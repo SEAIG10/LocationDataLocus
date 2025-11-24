@@ -10,6 +10,7 @@ import {
   ARKitLocationData,
   LocationUpdateMessage,
 } from './types.js';
+import { detectZone, printRoomInfo } from './zoneDetector.js';
 
 // Express 앱 설정
 const app = express();
@@ -163,7 +164,7 @@ wss.on('connection', (ws: WebSocket, req) => {
 });
 
 /**
- * ✅ ARKit 3D 위치 처리
+ * ARKit 3D 위치 처리
  */
 function handleARKitLocation(clientId: number, message: ARKitLocationData) {
   const {
@@ -172,11 +173,15 @@ function handleARKitLocation(clientId: number, message: ARKitLocationData) {
     timestamp,
   } = message.data;
 
+  // Zone 자동 감지
+  const zone = detectZone(position3D);
+
   console.log(
     `  [ARKit] 3D 좌표: (${position3D.x.toFixed(3)}, ${position3D.y.toFixed(
       3,
     )}, ${position3D.z.toFixed(3)})`,
   );
+  console.log(`  [Zone] ${zone}`);
   console.log(`  정확도: ±${(accuracy * 100).toFixed(1)} cm`);
   console.log(`  시간: ${new Date(timestamp).toLocaleString('ko-KR')}`);
 
@@ -186,6 +191,7 @@ function handleARKitLocation(clientId: number, message: ARKitLocationData) {
     position3D,
     accuracy,
     timestamp,
+    zone,
   };
 
   locationHistory.push(record);
