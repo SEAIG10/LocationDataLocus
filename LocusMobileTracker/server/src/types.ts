@@ -75,6 +75,7 @@ export interface LocationUpdatePayload {
   clientId: number;
   receivedAt: string;
   position3D: Position3D;
+  zone?: string;
 
   // 아래는 선택
   latitude?: number;
