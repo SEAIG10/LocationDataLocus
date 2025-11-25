@@ -143,7 +143,7 @@ LocationDataLocus
 
 # 📊 Data Flow Overview
 
-```mermaid
+```
 flowchart LR
     A[Mobile Tracker (Expo)] -->|GPS/IMU Data| B[LocusBackend]
     B -->|Real-time API| C[LocusClient (3D UI)]
