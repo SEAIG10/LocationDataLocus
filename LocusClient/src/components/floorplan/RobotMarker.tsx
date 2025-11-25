@@ -6,6 +6,8 @@
 import React from 'react';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { RoomLabel } from "../../types";
+
 
 interface RobotMarkerProps {
   position: [number, number, number];

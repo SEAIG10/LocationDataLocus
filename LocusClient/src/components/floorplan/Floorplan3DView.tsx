@@ -1,9 +1,9 @@
-// src/Floorplan3dview.tsx
+// src/components/floorplan/Floorplan3DView.tsx
 import React, { Suspense, useMemo } from "react";
 import { Canvas, ThreeEvent } from "@react-three/fiber";
 import { OrbitControls, useGLTF, Html, Line } from "@react-three/drei";
 import * as THREE from "three";
-import { RoomLabel } from "./types";
+import { RoomLabel } from "../../types";
 
 interface Floorplan3DViewProps {
   isEditMode: boolean;
@@ -13,6 +13,8 @@ interface Floorplan3DViewProps {
   onEditLabel: (id: string) => void;
   onDeleteLabel: (id: string) => void;
   robotPosition: [number, number, number] | null;
+  selectedLabel?: RoomLabel | null;
+  onSelectLabel?: (label: RoomLabel | null) => void;
   robotCurrentRoom: string | null;
 }
 
@@ -25,7 +27,7 @@ interface ModelProps {
 const Model: React.FC<ModelProps> = ({ isEditMode, onAddLabel }) => {
   const { scene } = useGLTF("/Room.glb") as any;
 
-  // ❗ 재질 색은 건드리지 말고, 그림자만 켜준다
+  // 재질은 건들지 말고 그림자만 켜기
   scene.traverse((child: THREE.Object3D) => {
     if ((child as THREE.Mesh).isMesh) {
       const mesh = child as THREE.Mesh;
@@ -34,7 +36,6 @@ const Model: React.FC<ModelProps> = ({ isEditMode, onAddLabel }) => {
     }
   });
 
-  // 스케일/회전/위치 세팅 (기존이랑 동일)
   scene.scale.set(0.45, 0.45, 0.45);
   scene.rotation.set(1, 0, 0);
   scene.position.set(0, 0, 0);
@@ -143,6 +144,8 @@ interface LabelProps {
   onEdit: (id: string) => void;
   onDelete: (id: string) => void;
   isEditMode: boolean;
+  isSelected: boolean;
+  onSelectLabel?: (label: RoomLabel | null) => void;
 }
 
 const Label: React.FC<LabelProps> = ({
@@ -150,10 +153,19 @@ const Label: React.FC<LabelProps> = ({
   onEdit,
   onDelete,
   isEditMode,
+  isSelected,
+  onSelectLabel,
 }) => {
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    onEdit(label.id);
+
+    if (onSelectLabel) {
+      // 이미 선택되어 있으면 다시 클릭 시 해제
+      onSelectLabel(isSelected ? null : label);
+    } else {
+      // 선택 핸들러 없으면 그냥 편집 진입
+      onEdit(label.id);
+    }
   };
 
   const handleDelete = (e: React.MouseEvent) => {
@@ -163,11 +175,42 @@ const Label: React.FC<LabelProps> = ({
 
   return (
     <Html position={label.position} center>
-      <div className="room-label" onClick={handleClick}>
-        <div className="label-content">
-          <span className="label-text">{label.name}</span>
+      <div
+        className="room-label"
+        onClick={handleClick}
+        style={{
+          transform: "translate(-50%, -50%)",
+        }}
+      >
+        <div
+          className="label-content"
+          style={{
+            padding: "4px 8px",
+            borderRadius: 12,
+            background: isSelected
+              ? "rgba(124,93,250,0.9)"
+              : "rgba(0,0,0,0.65)",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <span className="label-text" style={{ fontSize: 11 }}>
+            {label.name}
+          </span>
           {isEditMode && (
-            <button className="label-delete-btn" onClick={handleDelete}>
+            <button
+              className="label-delete-btn"
+              onClick={handleDelete}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: "#ffd5d5",
+                cursor: "pointer",
+                fontSize: 11,
+              }}
+            >
               ×
             </button>
           )}
@@ -193,7 +236,7 @@ const RobotMarker: React.FC<RobotMarkerProps> = ({
         <sphereGeometry args={[0.1, 16, 16]} />
         <meshStandardMaterial color="#4dabff" />
       </mesh>
-      <Html position={[position[0], position[1]+0.4, position[2]]} center>
+      <Html position={[position[0], position[1] + 0.4, position[2]]} center>
         <div
           style={{
             fontSize: 8,
@@ -203,7 +246,7 @@ const RobotMarker: React.FC<RobotMarkerProps> = ({
             color: "#fff",
           }}
         >
-          {currentRoom ?? "히"}
+          {currentRoom ?? "로봇"}
         </div>
       </Html>
     </group>
@@ -219,6 +262,8 @@ const Floorplan3DView: React.FC<Floorplan3DViewProps> = ({
   onEditLabel,
   onDeleteLabel,
   robotPosition,
+  selectedLabel,
+  onSelectLabel,
   robotCurrentRoom,
 }) => {
   return (
@@ -226,10 +271,8 @@ const Floorplan3DView: React.FC<Floorplan3DViewProps> = ({
       {/* 배경 & 조명 */}
       <color attach="background" args={["#f5f5f7"]} />
 
-      {/* 전체 톤 밝게 */}
       <ambientLight intensity={0.9} />
 
-      {/* 메인 방향광 */}
       <directionalLight
         position={[5, 10, 5]}
         intensity={1.0}
@@ -238,11 +281,7 @@ const Floorplan3DView: React.FC<Floorplan3DViewProps> = ({
         shadow-mapSize-height={2048}
       />
 
-      {/* 반대편에서 살짝 채워주는 보조광 */}
-      <directionalLight
-        position={[-4, 6, -3]}
-        intensity={1.0}
-      />
+      <directionalLight position={[-4, 6, -3]} intensity={1.0} />
 
       <Suspense fallback={null}>
         {/* Room.glb */}
@@ -259,13 +298,19 @@ const Floorplan3DView: React.FC<Floorplan3DViewProps> = ({
 
         {/* 코너 마커 */}
         {clickedCorners.map((corner, index) => (
-          <CornerMarker key={`corner-${index}`} position={corner} index={index} />
+          <CornerMarker
+            key={`corner-${index}`}
+            position={corner}
+            index={index}
+          />
         ))}
 
         {/* 임시 라인 */}
-        {clickedCorners.length > 1 && <PreviewLines corners={clickedCorners} />}
+        {clickedCorners.length > 1 && (
+          <PreviewLines corners={clickedCorners} />
+        )}
 
-        {/* 라벨들 */}
+        {/* 라벨 */}
         {labels.map((label) => (
           <Label
             key={label.id}
@@ -273,6 +318,8 @@ const Floorplan3DView: React.FC<Floorplan3DViewProps> = ({
             onEdit={onEditLabel}
             onDelete={onDeleteLabel}
             isEditMode={isEditMode}
+            isSelected={selectedLabel?.id === label.id}
+            onSelectLabel={onSelectLabel}
           />
         ))}
 
