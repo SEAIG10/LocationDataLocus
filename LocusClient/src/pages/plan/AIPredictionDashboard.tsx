@@ -31,8 +31,8 @@ import {
   List,
   TrendingUp,
   X,
-  Check,
   Trash2,
+  AlertTriangle,
   Info
 } from "lucide-react";
 import { toast } from "sonner";
@@ -40,27 +40,20 @@ import { useRobotTracking } from "../../hooks/useRobotTracking";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { getLabelsAPI, createLabelAPI, deleteLabelAPI } from "../../api/labels";
-import { RoomLabel } from "../../api/types";
+// 🔥 [추가] 로그 API 임포트
+import { getSensorEventsAPI } from "../../api/logs";
+import { RoomLabel, SensorEvent } from "../../api/types";
 
-const TRACKER_SERVER_URL = "https://1942e3ed6782.ngrok-free.app";
-
-// 🔥 [복구] 삭제했던 PredictionEvent 인터페이스 복구
-export interface PredictionEvent {
-  id: string;
-  title: string;
-  confidence: number;
-  room: string;
-  sensors: ("vision" | "audio" | "location")[];
-  time: string;
-  type: "vision" | "audio" | "location";
-}
-
+// 🔥 [백엔드 주소]
+// 실제 배포 시에는 .env의 VITE_API_URL을 사용하는 것이 좋습니다.
+const BACKEND_URL = import.meta.env.VITE_API_URL || "http://localhost:4000";
 /** ====== Type Definitions ====== */
 
+// 타임라인 표시용 인터페이스
 export interface TimelineEvent {
   id: string;
   time: string;
-  type: "vision" | "audio" | "motion";
+  type: "vision" | "audio" | "motion" | "system";
   icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
   isHighlighted: boolean;
   label: string;
@@ -115,7 +108,6 @@ function RoomModel({ onClick }: { onClick?: (e: ThreeEvent<MouseEvent>) => void 
         mesh.receiveShadow = true;
       }
     });
-    // 모델 기본 스케일 및 회전
     scene.scale.set(0.45, 0.45, 0.45);
     scene.rotation.set(0, 0, 0);
     scene.position.set(0, -1, 0);
@@ -125,6 +117,9 @@ function RoomModel({ onClick }: { onClick?: (e: ThreeEvent<MouseEvent>) => void 
 }
 
 function Robot({ position }: { position: [number, number, number] }) {
+  // 좌표가 유효하지 않으면 렌더링하지 않음 (NaN 에러 방지)
+  if (position.some(p => isNaN(p))) return null;
+
   return (
     <group position={position}>
       <mesh position={[0, 0.06, 0]} castShadow>
@@ -171,10 +166,8 @@ function ExistingLabels({
         
         const points3D = label.points.map(p => [p.x, 0, p.z] as [number, number, number]);
         const closedPoints = [...points3D, points3D[0]];
-
         const centerX = label.points.reduce((sum, p) => sum + p.x, 0) / label.points.length;
         const centerZ = label.points.reduce((sum, p) => sum + p.z, 0) / label.points.length;
-
         const isSelected = label.id === selectedLabelId;
 
         return (
@@ -213,7 +206,7 @@ function Scene({
   labels,
   onLabelClick,
   selectedLabelId,
-  cameraZoom // 🔥 추가: 줌 레벨 전달 받음
+  cameraZoom
 }: {
   robotPosition: RobotPos;
   mapConfig: MapConfig;
@@ -227,7 +220,6 @@ function Scene({
 }) {
   return (
     <>
-      {/* 🔥 반응형 줌 적용 */}
       <OrthographicCamera 
         makeDefault 
         position={[0, 20, 0]} 
@@ -239,9 +231,9 @@ function Scene({
       <OrbitControls 
         enableRotate={true} 
         maxPolarAngle={Math.PI / 2} 
-        minZoom={20} // 줌 아웃 더 많이 허용
+        minZoom={20}
         maxZoom={300} 
-        enableDamping={true} // 부드러운 움직임
+        enableDamping={true}
       />
 
       <color attach="background" args={["#f8f9fa"]} />
@@ -283,28 +275,19 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
   const [showNameDialog, setShowNameDialog] = useState(false);
   const [selectedLabel, setSelectedLabel] = useState<RoomLabel | null>(null);
   const [currentZone, setCurrentZone] = useState<string | null>(null);
-  const [predictions] = useState<PredictionEvent[]>([]); 
-
-  // 🔥 [추가] 화면 크기에 따른 줌 레벨 계산 (반응형)
   const [cameraZoom, setCameraZoom] = useState(50);
+  
+  // 🔥 [추가] 실제 타임라인 데이터 State
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
 
   useEffect(() => {
     const handleResize = () => {
-      // 화면이 작을수록 줌 값을 작게 하여(멀리서 보게 하여) 집 전체가 보이도록 함
-      // 예: 모바일(375px) -> 35, 데스크탑(1920px) -> 90
       const width = window.innerWidth;
-      if (width < 640) {
-        setCameraZoom(40); // 모바일
-      } else if (width < 1024) {
-        setCameraZoom(60); // 태블릿
-      } else {
-        setCameraZoom(90); // 데스크탑
-      }
+      if (width < 640) setCameraZoom(40);
+      else if (width < 1024) setCameraZoom(60);
+      else setCameraZoom(90);
     };
-
-    // 초기 실행
     handleResize();
-    
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -314,19 +297,63 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
     if (saved) setMapConfig(JSON.parse(saved));
   }, [homeId]);
 
+  // 라벨 불러오기
   useEffect(() => {
     if (!homeId) return;
     getLabelsAPI(homeId).then(setLabels).catch(console.error);
   }, [homeId]);
 
+  // 🔥 [추가] 이벤트 로그 불러오기 (타임라인용)
+  useEffect(() => {
+    if (!homeId) return;
+    const fetchEvents = async () => {
+      try {
+        // 실제 API 호출 (아직 데이터가 없다면 빈 배열이 옴)
+        const events = await getSensorEventsAPI(homeId);
+        
+        // 백엔드 데이터(SensorEvent) -> 프론트 데이터(TimelineEvent) 변환
+        const mappedEvents: TimelineEvent[] = events.map(evt => ({
+          id: evt.id,
+          time: new Date(evt.eventTime).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
+          type: evt.eventType.toLowerCase() as any, // 'AUDIO' -> 'audio'
+          icon: evt.eventType === 'VISION' ? Camera : (evt.eventType === 'AUDIO' ? Volume2 : Activity),
+          isHighlighted: evt.severity === 'CRITICAL',
+          label: evt.subType || "이벤트 감지"
+        }));
+        
+        setTimelineEvents(mappedEvents);
+      } catch (e) {
+        console.error("이벤트 로드 실패", e);
+      }
+    };
+    
+    fetchEvents();
+    const interval = setInterval(fetchEvents, 5000); // 5초마다 갱신
+    return () => clearInterval(interval);
+  }, [homeId]);
+
+  // 🔥 [트래킹] HTTP Polling 방식 (백엔드 URL 사용)
   const { robotPosition, isConnected: isTrackerConnected, accuracy } = useRobotTracking({
-    serverUrl: TRACKER_SERVER_URL,
+    serverUrl: BACKEND_URL, 
     autoConnect: true,
   });
+
+  // 🔥 [디버깅] 데이터가 잘 들어오는지 콘솔에 출력
+  useEffect(() => {
+    if (robotPosition) {
+      console.log("📍 수신된 로봇 좌표:", robotPosition);
+    } else {
+      console.log("⏳ 로봇 좌표 대기 중...");
+    }
+  }, [robotPosition]);
 
   const calibratedRobotPosition = useMemo((): RobotPos => {
     if (!robotPosition) return null;
     const [rawX, , rawZ] = robotPosition;
+
+    // 🔥 [안전장치] 데이터가 없거나 숫자가 아니면 null 반환 (화면 에러 방지)
+    if (typeof rawX !== 'number' || typeof rawZ !== 'number') return null;
+
     const scaledX = rawX * mapConfig.scale;
     const scaledZ = rawZ * mapConfig.scale;
     const radData = (mapConfig.dataRotateDeg * Math.PI) / 180;
@@ -406,10 +433,6 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
     }
   };
 
-  const [timelineEvents] = useState<TimelineEvent[]>([
-    { id: "1", time: "14:32", type: "vision", icon: Camera, isHighlighted: true, label: "식기 감지" },
-    { id: "2", time: "14:28", type: "audio", icon: Volume2, isHighlighted: true, label: "식기 부딪힘" },
-  ]);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   const [sheetExpanded, setSheetExpanded] = useState(false);
 
@@ -452,7 +475,6 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in px-4" onClick={() => setSelectedLabel(null)}>
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl relative" onClick={e => e.stopPropagation()}>
             <button onClick={() => setSelectedLabel(null)} className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-500" /></button>
-            
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center text-green-600">
                 <TrendingUp className="w-5 h-5" />
@@ -462,7 +484,6 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
                 <span className="text-xs text-gray-500">Zone ID: {selectedLabel.id}</span>
               </div>
             </div>
-
             <div className="bg-gray-50 p-4 rounded-xl space-y-2 mb-4">
               <div className="flex justify-between text-xs"><span className="text-gray-500">오염도 예측</span><span className="font-bold text-green-600">안전 (Low)</span></div>
               <div className="w-full bg-gray-200 h-1.5 rounded-full overflow-hidden"><div className="w-[10%] h-full bg-green-500 rounded-full" /></div>
@@ -475,13 +496,12 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
 
       <div className="absolute top-0 left-0 right-0 z-30 bg-white/90 backdrop-blur-sm border-b border-gray-200">
         <div className="max-w-md mx-auto px-4 py-3 flex items-center justify-between">
-          <button onClick={() => navigate("/home")} className="flex items-center gap-2 text-foreground/70 hover:text-foreground"><ChevronLeft className="w-5 h-5" /><span className="text-sm">목록</span></button>
+          <button onClick={() => navigate("/homes")} className="flex items-center gap-2 text-foreground/70 hover:text-foreground"><ChevronLeft className="w-5 h-5" /><span className="text-sm">목록</span></button>
           <div className="flex items-center gap-2"><Activity className="w-4 h-4 text-primary animate-pulse" /><h2 className="text-foreground text-sm">AI 오염 예측 (#{homeId})</h2></div>
           <button onClick={() => setShowConfig(!showConfig)} className="p-2 hover:bg-gray-100 rounded-full"><Settings2 className="w-5 h-5 text-gray-500" /></button>
         </div>
       </div>
 
-      {/* 🔥 [수정] 설정 패널 모바일 대응 (너비 조정) */}
       {showConfig && !isCreatingLabel && (
         <div className="absolute top-16 right-4 z-40 bg-white/90 backdrop-blur shadow-xl border border-gray-200 p-4 rounded-xl w-64 sm:w-72 text-xs space-y-4 max-w-[calc(100vw-2rem)]">
            <div className="flex justify-between items-center font-bold text-gray-700 pb-2 border-b border-gray-100">
@@ -516,14 +536,22 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
             labels={labels}
             onLabelClick={(label) => setSelectedLabel(label)}
             selectedLabelId={selectedLabel?.id || null}
-            cameraZoom={cameraZoom} // 🔥 추가: 반응형 줌 적용
+            cameraZoom={cameraZoom} 
           />
         </Suspense>
       </Canvas>
 
       <div className="absolute top-16 left-4 z-20 bg-white/95 backdrop-blur-xl rounded-2xl border border-gray-200 shadow-xl px-3 py-2">
         <button className="flex items-center gap-2" onClick={() => setTimelineExpanded((v) => !v)}><Clock className="w-4 h-4 text-primary" /><span className="text-foreground text-xs font-medium">타임라인</span><ChevronUp className={`w-3 h-3 transition-transform ${timelineExpanded ? "" : "rotate-180"}`} /></button>
-        {timelineExpanded && (<div className="mt-2 flex gap-2 overflow-x-auto pb-1 max-w-[200px] scrollbar-hide">{timelineEvents.map((event) => (<div key={event.id} className="flex-shrink-0 flex flex-col items-center p-2 rounded bg-gray-50 border border-gray-200"><event.icon className="w-3 h-3 text-gray-500" /></div>))}</div>)}
+        {timelineExpanded && (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1 max-w-[200px] scrollbar-hide">
+                {timelineEvents.length > 0 ? (
+                    timelineEvents.map((event) => (<div key={event.id} className="flex-shrink-0 flex flex-col items-center p-2 rounded bg-gray-50 border border-gray-200"><event.icon className="w-3 h-3 text-gray-500" /></div>))
+                ) : (
+                    <span className="text-[10px] text-gray-400 p-1">이벤트 없음</span>
+                )}
+            </div>
+        )}
       </div>
 
       <div className={`absolute bottom-0 left-0 right-0 z-20 bg-white/98 backdrop-blur-2xl border-t border-gray-200 rounded-t-3xl shadow-2xl transition-all duration-300 ${sheetExpanded ? "h-[60vh]" : "h-[70px]"}`}>
@@ -534,11 +562,30 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
           </button>
           {sheetExpanded && (
             <div className="px-5 pb-6 pt-3 overflow-y-auto flex-1">
-              <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2">
-                 <Activity className="w-8 h-8 opacity-20" />
-                 <p className="text-sm">현재 감지된 오염 예측 정보가 없습니다.</p>
-                 {labels.length > 0 && <p className="text-xs text-gray-500">등록된 구역: {labels.length}개</p>}
-              </div>
+              {timelineEvents.length > 0 ? (
+                  <div className="space-y-4">
+                      {timelineEvents.map(evt => (
+                          <div key={evt.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                              <div className="w-10 h-10 rounded-full bg-white border border-gray-200 flex items-center justify-center">
+                                  <evt.icon className="w-5 h-5 text-gray-600" />
+                              </div>
+                              <div className="flex-1">
+                                  <div className="flex justify-between">
+                                      <h4 className="font-bold text-sm text-gray-800">{evt.label}</h4>
+                                      <span className="text-xs text-gray-400">{evt.time}</span>
+                                  </div>
+                                  <p className="text-xs text-gray-500">{evt.type} 감지됨</p>
+                              </div>
+                          </div>
+                      ))}
+                  </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-40 text-gray-400 space-y-2">
+                    <Activity className="w-8 h-8 opacity-20" />
+                    <p className="text-sm">현재 감지된 오염 예측 정보가 없습니다.</p>
+                    {labels.length > 0 && <p className="text-xs text-gray-500">등록된 구역: {labels.length}개</p>}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -551,12 +598,11 @@ export function AIPredictionDashboard({ onBack }: { onBack?: () => void }) {
         </div>
       )}
 
-      {/* 🔥 [수정] 상태 창 모바일 대응 (글자 크기 및 여백 조정) */}
       <div className="absolute bottom-[90px] left-4 z-20 bg-white/90 backdrop-blur-md rounded-full px-3 py-1.5 shadow-lg border border-gray-100 flex items-center gap-2 sm:gap-3 max-w-[200px]">
         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isRobotOnline ? "bg-green-500 animate-pulse" : "bg-gray-300"}`} />
         <div className="flex flex-col truncate">
            <span className="text-[10px] sm:text-xs font-bold text-gray-800 truncate">{isRobotOnline ? (currentZone ? `${currentZone} 청소 중` : "이동 중") : "연결 대기 중"}</span>
-           <span className="text-[8px] sm:text-[9px] text-gray-500 truncate">{isTrackerConnected ? "Connected" : "Offline"} · {accuracyText}</span>
+           <span className="text-[8px] sm:text-[9px] text-gray-500 truncate">{isTrackerConnected ? "Connected (HTTP)" : "Offline"} · {accuracyText}</span>
         </div>
       </div>
     </div>

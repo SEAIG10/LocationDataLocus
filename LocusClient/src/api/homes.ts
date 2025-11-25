@@ -22,7 +22,7 @@ export const getHomeDetailAPI = async (homeId: string) => {
 };
 
 // 🔥 새 홈 생성 (이미지 업로드 지원을 위해 FormData 사용)
-export const createHomeAPI = async (name: string, addressLine: string, imageFile?: File) => {
+export const createHomeAPI = async (name: string, addressLine: string, imageFile?: File, modelFile?: File) => {
   const formData = new FormData();
   
   // 텍스트 데이터 추가
@@ -34,6 +34,10 @@ export const createHomeAPI = async (name: string, addressLine: string, imageFile
   // 이미지 파일 추가 (파일이 있을 때만)
   if (imageFile) {
     formData.append('image', imageFile);
+  }
+  
+  if (modelFile) {
+    formData.append('model', modelFile);
   }
 
   // Content-Type: multipart/form-data 헤더 설정
