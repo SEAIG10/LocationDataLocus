@@ -1,148 +1,172 @@
-🏠 LOCUS (Location Data Service)
+# 🏠 LOCUS (Location Data Service)
 
-LG ThinQ와 함께하는 스마트 홈 케어 플랫폼 > 로봇 청소기의 실시간 위치 추적 및 AI 오염 예측 대시보드
+LG ThinQ 기반 스마트 홈 케어 플랫폼  
+**로봇 청소기 실시간 위치 추적 + AI 오염 예측 + 3D Floorplan**
 
+---
 
-📖 프로젝트 소개 (Project Overview)
+## 📖 프로젝트 소개 (Project Overview)
 
-LOCUS는 공간 데이터(Spatial Data)를 활용하여 스마트 홈 경험을 혁신하는 웹 애플리케이션입니다.
-사용자는 자신의 집을 3D로 시각화하여 관리하고, 로봇 청소기의 실시간 위치를 추적하며, AI가 분석한 오염 예측 정보를 통해 효율적인 청소 계획을 수립할 수 있습니다.
+**LOCUS**는 공간 데이터와 AI를 기반으로 집 안의 구조와 로봇 청소기의 이동을 실시간으로 추적하고,  
+3D Floorplan 위에서 시각화하며, 오염 발생 지역을 사전에 예측하는 스마트 홈 서비스입니다.
 
-🛠 기술 스택 (Tech Stack)
+---
 
-Frontend (/LocusClient)
+## 🛠 기술 스택 (Tech Stack)
 
-Core: React, TypeScript, Vite
+### **Frontend – `/LocusClient`**
+- React, TypeScript, Vite  
+- Tailwind CSS  
+- Three.js / React Three Fiber / Drei  
+- Axios  
+- React Router  
 
-Styling: Tailwind CSS
+### **Backend – `/LocusBackend`**
+- Node.js (Fastify)  
+- PostgreSQL + Prisma ORM  
+- JWT Auth  
+- File Upload (Multipart)  
 
-3D Visualization: Three.js, @react-three/fiber, @react-three/drei
+### **Mobile Tracker – `/LocusTrackerExpo`**
+- React Native / Expo  
+- GPS & IMU 기반 위치 전송  
+- Axios + Background Task  
 
-State & Routing: React Router DOM, Axios
+---
 
-UI Components: Lucide React (Icons)
+## ✨ 주요 기능 (Key Features)
 
-Backend (/LocusBackend)
+### 🔐 인증 시스템
+- 이메일 회원가입 / 로그인  
+- JWT 기반 인증  
+- 비밀번호 해싱 (bcrypt)
 
-Runtime: Node.js
+### 🏠 홈 관리
+- 사진 업로드 + 집 생성  
+- 여러 개의 홈을 생성/조회  
+- 권한 기반 홈 삭제  
 
-Framework: Fastify
+### 🗺️ 3D 대시보드 & 라벨링
+- Room.glb 로드 / 실시간 렌더링  
+- 다각형(Polygon) 기반 Zone 라벨  
+- 라벨 CRUD  
+- 회전/크기/보정 UI  
 
-Database: PostgreSQL
+### 🤖 로봇 실시간 추적
+- WebSocket 기반 실시간 좌표 수신  
+- Point-in-Polygon으로 현재 위치 판별  
+- 방 진입/이탈 로그  
 
-ORM: Prisma
+---
 
-Authentication: JWT (JSON Web Token)
+# 🚀 Getting Started
 
-File Handling: @fastify/multipart (Image Upload)
+---
 
-✨ 주요 기능 (Key Features)
+## **1. Backend Setup**
 
-1. 🔐 인증 및 사용자 관리 (Authentication)
-
-이메일 기반 회원가입 및 로그인.
-
-JWT 토큰 기반의 보안 인증.
-
-비밀번호 암호화 (Bcrypt).
-
-2. 🏠 홈 관리 (Home Management)
-
-홈 생성: 사진 업로드와 함께 나만의 홈(공간) 생성.
-
-홈 목록: 내가 소유하거나 소속된 홈 리스트 조회 (이미지 썸네일 포함).
-
-홈 삭제: 소유자 권한 확인 후 안전한 삭제 기능.
-
-3. 🗺️ 3D 대시보드 & 라벨링 (3D Dashboard & Labeling)
-
-3D 공간 시각화: Room.glb 모델을 활용한 인터랙티브 3D 뷰어.
-
-화면 보정: 집의 회전, 크기, 센서 방향 등을 실시간으로 조정하고 저장.
-
-구역(Label) 생성: 3D 맵 위를 직접 클릭하여 다각형(Polygon) 구역 지정.
-
-라벨 관리: 생성된 구역 이름 설정 및 삭제 기능.
-
-4. 🤖 로봇 실시간 추적 (Real-time Tracking)
-
-실시간 위치 표시: 로봇 청소기의 좌표를 받아 3D 맵 위에 매핑.
-
-현재 위치 판별: Point-in-Polygon 알고리즘을 통해 로봇이 현재 어느 방(Zone)에 있는지 실시간 계산 및 표시.
-
-상태 모니터링: 연결 상태 및 센서 정확도 표시.
-
-🚀 실행 가이드 (Getting Started)
-
-사전 요구사항 (Prerequisites)
-
-Node.js (v18 이상 권장)
-
-Docker (PostgreSQL 데이터베이스 실행용)
-
-1. 백엔드 설정 (Backend Setup)
-
-# 1. 백엔드 폴더로 이동
+```bash
 cd LocusBackend
-
-# 2. 패키지 설치
 npm install
-
-# 3. 데이터베이스 실행 (Docker)
-docker-compose up -d
-
-# 4. Prisma 스키마 반영
+docker-compose up -d   # PostgreSQL 실행
 npx prisma db push
 npx prisma generate
+npm run dev   # http://localhost:4000
+```
 
-# 5. 서버 실행 (Port: 4000)
-npm run dev
+---
 
+## **2. Frontend Setup**
 
-2. 프론트엔드 설정 (Frontend Setup)
-
-# 1. 프론트엔드 폴더로 이동
+```bash
 cd LocusClient
-
-# 2. 패키지 설치
 npm install
+npm run dev   # http://localhost:5173
+```
 
-# 3. 개발 서버 실행 (Port: 5173)
-npm run dev
+### 📌 휴대폰 접속 시 주의사항
+`src/api/client.ts` 수정:
 
+```ts
+baseURL: "http://192.168.x.x:4000/api";
+```
 
-Note: 모바일 등 외부 기기에서 접속하려면 LocusClient/src/api/client.ts의 baseURL을 본인 PC의 IP 주소(예: http://192.168.x.x:4000/api)로 변경해야 합니다.
+---
 
-📂 폴더 구조 (Directory Structure)
+## **3. Mobile (Expo) Setup**
 
-LocationDataLocus/
-├── LocusBackend/           # 백엔드 (API Server)
-│   ├── prisma/             # DB 스키마 및 설정
+```bash
+cd LocusTrackerExpo
+npm install
+npx expo start
+```
+
+- Expo Go 앱 → QR 코드 스캔
+- 위치 정보가 Backend `/tracking` 엔드포인트로 전송됨
+
+---
+
+# 📂 Folder Structure
+
+```
+LocationDataLocus
+├── LocusBackend/
+│   ├── prisma/
 │   ├── src/
-│   │   ├── modules/        # 기능별 모듈 (Auth, Homes, Labels, Users)
-│   │   ├── config/         # 환경 변수 및 DB 설정
-│   │   ├── app.ts          # Fastify 앱 설정
-│   │   └── server.ts       # 서버 엔트리 포인트
-│   └── uploads/            # 업로드된 이미지 저장소
+│   │   ├── modules/
+│   │   │   ├── auth/
+│   │   │   ├── homes/
+│   │   │   ├── labels/
+│   │   │   └── users/
+│   │   ├── config/
+│   │   ├── app.ts
+│   │   └── server.ts
+│   └── uploads/
 │
-└── LocusClient/            # 프론트엔드 (React App)
-    ├── public/             # 정적 파일 (3D 모델 Room.glb 등)
-    ├── src/
-    │   ├── api/            # API 호출 함수 모음
-    │   ├── components/     # 재사용 UI 컴포넌트
-    │   ├── hooks/          # 커스텀 훅 (로봇 트래킹 등)
-    │   ├── pages/          # 페이지 단위 컴포넌트
-    │   │   ├── auth/       # 로그인, 회원가입
-    │   │   ├── home/       # 홈 목록, 생성
-    │   │   ├── plan/       # 3D 대시보드
-    │   │   └── label/      # 라벨 리스트
-    │   └── App.tsx         # 라우팅 설정
+├── LocusClient/
+│   ├── public/
+│   │   └── Room.glb
+│   ├── src/
+│   │   ├── api/
+│   │   ├── components/
+│   │   ├── hooks/
+│   │   ├── pages/
+│   │   └── App.tsx
+│
+└── LocusTrackerExpo/
+    ├── App.js
+    ├── screens/
+    └── utils/
+```
 
+---
 
-🤝 Contributing
+# 📊 Data Flow Overview
 
-이 프로젝트는 개인 학습 및 포트폴리오 목적으로 개발되었습니다. 이슈나 개선 사항은 Issue 탭에 남겨주세요.
+```mermaid
+flowchart LR
+    A[Mobile Tracker (Expo)] -->|GPS/IMU Data| B[LocusBackend]
+    B -->|Real-time API| C[LocusClient (3D UI)]
+    C -->|Label CRUD| B
+    B -->|Home/Label DB| D[(PostgreSQL)]
+```
 
-📝 License
+---
 
-This project is licensed under the MIT License.
+# 🧠 Future Work
+
+- Matter & Thread 기반 IoT 연동  
+- 멀티모달 오염 예측 AI (YOLO + YAMNet + 위치 데이터)  
+- App Store / Google Play 리뷰 자동 분석 파이프라인  
+- 청소 스케줄 자동 추천 모델  
+- 3D SLAM 기반 자동 Floorplan 생성  
+
+---
+
+# 🤝 Contributing
+Pull Request & Issue 환영합니다.
+
+---
+
+# 📝 License
+MIT License
