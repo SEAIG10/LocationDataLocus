@@ -45,9 +45,10 @@ const LabelListPage: React.FC = () => {
   };
 
   const handleDeleteLabel = async (labelId: string) => {
+    if (!homeId) return;
     if (!confirm("이 라벨을 삭제하시겠습니까?")) return;
     try {
-      await deleteLabelAPI(labelId);
+      await deleteLabelAPI(homeId, labelId);
       setLabels(labels.filter(l => l.id !== labelId));
     } catch (error) {
       alert("삭제 실패");

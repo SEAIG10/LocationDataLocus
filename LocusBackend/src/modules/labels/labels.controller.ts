@@ -1,7 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import * as labelsService from './labels.service';
 
-// 라벨 목록 조회 핸들러
 export async function getLabelsHandler(
   request: FastifyRequest<{ Params: { homeId: string } }>,
   reply: FastifyReply
@@ -16,7 +15,6 @@ export async function getLabelsHandler(
   }
 }
 
-// 라벨 생성 핸들러
 export async function createLabelHandler(
   request: FastifyRequest<{ Params: { homeId: string }, Body: { name: string, points: any[] } }>,
   reply: FastifyReply
@@ -24,26 +22,24 @@ export async function createLabelHandler(
   try {
     const { homeId } = request.params;
     const { name, points } = request.body;
-    
+
     console.log(`[Create Label] Home: ${homeId}, Name: ${name}, Points: ${points?.length}`);
-    
+
     const label = await labelsService.createLabel(homeId, name, points);
     return reply.code(201).send(label);
   } catch (e: any) {
-    // 🔥 여기에 에러 원인이 찍힙니다!
-    console.error("[Create Label Error Detail]:", e); 
+    console.error("[Create Label Error]:", e);
     return reply.code(500).send({ message: e.message });
   }
 }
 
-// 라벨 삭제 핸들러
 export async function deleteLabelHandler(
-  request: FastifyRequest<{ Params: { labelId: string } }>,
+  request: FastifyRequest<{ Params: { homeId: string; labelId: string } }>,
   reply: FastifyReply
 ) {
   try {
-    const { labelId } = request.params;
-    await labelsService.deleteLabel(labelId);
+    const { homeId, labelId } = request.params;
+    await labelsService.deleteLabel(labelId, homeId);
     return reply.code(200).send({ message: "Deleted successfully" });
   } catch (e: any) {
     console.error("[Delete Label Error]", e);

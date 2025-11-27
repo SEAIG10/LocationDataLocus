@@ -16,11 +16,7 @@ export const createLabelAPI = async (homeId: string, name: string, points: {x:nu
 };
 
 // 삭제
-// DELETE /api/homes/labels/:labelId
-export const deleteLabelAPI = async (labelId: string) => {
-  // 주의: 백엔드 라우트 설정에 따라 경로가 달라질 수 있습니다.
-  // labels.routes.ts에서 app.delete('/labels/:labelId', ...) 로 설정했고
-  // app.ts에서 prefix: '/homes' 로 등록했으므로
-  // 최종 경로는 /api/homes/labels/:labelId 가 됩니다.
-  await client.delete(`/homes/labels/${labelId}`);
+// DELETE /api/homes/:homeId/labels/:labelId
+export const deleteLabelAPI = async (homeId: string, labelId: string) => {
+  await client.delete(`/homes/${homeId}/labels/${labelId}`);
 };

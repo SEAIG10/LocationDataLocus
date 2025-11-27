@@ -3,7 +3,7 @@
  * Room.json의 sections 정보를 사용하여 가장 가까운 방을 찾습니다.
  */
 
-import roomData from '../../../../LocusClient/src/Room.json' assert { type: 'json' };
+import roomData from '../../../LocusClient/src/Room.json' assert { type: 'json' };
 import { Position3D } from './types.js';
 
 interface RoomSection {

@@ -11,7 +11,6 @@ export async function labelsRoutes(app: FastifyInstance) {
   // POST /api/homes/:homeId/labels -> 라벨 생성
   app.post('/:homeId/labels', createLabelHandler);
   
-  // DELETE /api/homes/labels/:labelId -> 라벨 삭제
-  // (app.ts에서 prefix가 '/homes'로 설정된 경우, 이 경로는 /api/homes/labels/:id 가 됩니다)
-  app.delete('/labels/:labelId', deleteLabelHandler);
+  // DELETE /api/homes/:homeId/labels/:labelId -> 라벨 삭제
+  app.delete('/:homeId/labels/:labelId', deleteLabelHandler);
 }
