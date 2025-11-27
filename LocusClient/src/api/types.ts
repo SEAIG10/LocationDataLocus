@@ -29,7 +29,8 @@ export interface Home {
   addressLine?: string;
   role: 'OWNER' | 'MEMBER';
   deviceCount?: number;
-  imageUrl?: string | null; // 🔥 추가됨: 이미지 URL 필드
+  imageUrl?: string | null;
+  modelUrl?: string | null; // ✅ 3D 모델 URL 확인
 }
 
 // --- Device & Robot ---
@@ -70,4 +71,19 @@ export interface PollutionPrediction {
   labelName: string;
   probability: number;
   status: 'CLEANING_NEEDED' | 'CLEAN';
+}
+
+// 🔥 [추가] SensorEvent 인터페이스 (DB 스키마와 일치시킴)
+export interface SensorEvent {
+  id: string;
+  eventTime: string;
+  eventType: 'AUDIO' | 'VISION' | 'SYSTEM' | 'USER_ACTION';
+  subType?: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  payloadJson?: any;
+  
+  // 📍 스냅샷 좌표 (원본 로그가 지워져도 지도에 표시하기 위함)
+  snapshotX?: number;
+  snapshotY?: number;
+  snapshotZ?: number;
 }

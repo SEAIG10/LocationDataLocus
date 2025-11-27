@@ -1,51 +1,18 @@
-/**
- * RobotTracking.ts
- * WebSocket으로 실시간 로봇 위치를 추적하는 커스텀 훅 + 유틸 함수
- */
-
-import { useState, useEffect, useCallback } from 'react';
-
-interface Position3D {
-  x: number;
-  y: number;
-  z: number;
-}
-
-interface LocationUpdateData {
-  clientId: number;
-  latitude: number;
-  longitude: number;
-  accuracy: number;
-  timestamp: string;
-  receivedAt: string;
-  position3D: Position3D;
-  altitude: number | null;
-  heading: number | null;
-  speed: number | null;
-}
-
-interface LocationUpdateMessage {
-  type: 'location_update';
-  data: LocationUpdateData;
-}
-
-interface WelcomeMessage {
-  type: 'welcome';
-  clientId: number;
-  message: string;
-  serverTime: string;
-}
-
-type WebSocketMessage = LocationUpdateMessage | WelcomeMessage;
+import { useState, useEffect, useRef } from 'react';
+import axios from 'axios';
 
 interface UseRobotTrackingOptions {
   serverUrl: string;
   autoConnect?: boolean;
-  onError?: (error: Event) => void;
+  onError?: (error: any) => void;
   onConnect?: () => void;
   onDisconnect?: () => void;
 }
 
+/**
+ * HTTP Polling 방식의 로봇 위치 추적 훅
+ * 0.5초마다 백엔드에 "지금 어디야?"라고 물어봅니다.
+ */
 export function useRobotTracking({
   serverUrl,
   autoConnect = true,
@@ -55,111 +22,80 @@ export function useRobotTracking({
 }: UseRobotTrackingOptions) {
   const [robotPosition, setRobotPosition] = useState<[number, number, number] | null>(null);
   const [isConnected, setIsConnected] = useState(false);
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [accuracy, setAccuracy] = useState<number>(0);
-  const [ws, setWs] = useState<WebSocket | null>(null);
+  
+  // 🔥 [수정] NodeJS.Timeout 대신 ReturnType<typeof setInterval> 사용 (타입 에러 해결)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const connect = useCallback(() => {
-    if (ws?.readyState === WebSocket.OPEN) {
-      console.warn('WebSocket already connected');
-      return;
-    }
+  // 연결 (폴링 시작)
+  const connect = () => {
+    if (intervalRef.current) return; // 이미 실행 중이면 패스
 
-    // http/https로 들어와도 알아서 ws/wss로 변환
-    let wsUrl = serverUrl;
-    if (wsUrl.startsWith('https://')) {
-      wsUrl = wsUrl.replace('https://', 'wss://');
-    } else if (wsUrl.startsWith('http://')) {
-      wsUrl = wsUrl.replace('http://', 'ws://');
-    }
+    console.log(`📡 [HTTP Polling] 로봇 추적 시작: ${serverUrl}`);
+    onConnect?.();
+    setIsConnected(true);
 
-    console.log(`🔌 로봇 트래커 연결 시도: ${wsUrl}`);
-    const socket = new WebSocket(wsUrl);
-
-    socket.onopen = () => {
-      console.log('✅ WebSocket 연결 성공');
-      setIsConnected(true);
-
-      // 뷰어 클라이언트로 식별
-      socket.send(
-        JSON.stringify({
-          type: 'identify',
-          clientType: 'viewer',
-        }),
-      );
-
-      onConnect?.();
-    };
-
-    socket.onmessage = (event) => {
+    const fetchLocation = async () => {
       try {
-        const message: WebSocketMessage = JSON.parse(event.data);
+        // 백엔드의 GET /api/log/latest 엔드포인트 호출
+        const response = await axios.get(`${serverUrl}/api/log/latest`);
+        const data = response.data;
 
-        if (message.type === 'welcome') {
-          console.log(`환영 메시지: ${message.message}`);
-        } else if (message.type === 'location_update') {
-          const { position3D, accuracy } = message.data;
-
-          // 로봇 위치 업데이트 (Y축은 바닥 위로 살짝 띄우기)
-          const pos: [number, number, number] = [position3D.x, 0.1, position3D.z];
-          setRobotPosition(pos);
-          setAccuracy(accuracy);
-          setLastUpdate(new Date());
-
-          console.log('📍 로봇 위치 업데이트:', {
-            position: `(${position3D.x.toFixed(3)}, ${position3D.y.toFixed(3)}, ${position3D.z.toFixed(3)})`,
-            accuracy: `±${accuracy.toFixed(3)} (단위: 서버/클라이언트 정의)`,
-            timestamp: Date.now(),
-          });
+        // 데이터가 비어있지 않다면 업데이트
+        if (data && typeof data.x === 'number') {
+          // 좌표 업데이트 (x, y, z)
+          setRobotPosition([data.x, data.y, data.z]);
+          
+          // 정확도 업데이트 (없으면 0)
+          // 백엔드에서 rawPayloadJson.accuracy 등으로 보내주는지 확인 필요
+          // 여기선 편의상 rawPayloadJson이 있으면 파싱 시도
+          let acc = 0;
+          if (data.rawPayloadJson && data.rawPayloadJson.accuracy) {
+            acc = data.rawPayloadJson.accuracy;
+          }
+          setAccuracy(acc);
         }
       } catch (error) {
-        console.error('메시지 파싱 오류:', error);
+        console.error('❌ 위치 조회 실패:', error);
+        onError?.(error);
+        // 에러가 나도 멈추지 않고 계속 시도 (네트워크 일시적 문제 대비)
       }
     };
 
-    socket.onerror = (error) => {
-      console.error('❌ WebSocket 오류:', error);
-      onError?.(error);
-    };
+    // 1. 즉시 실행
+    fetchLocation();
 
-    socket.onclose = () => {
-      console.log('🔌 WebSocket 연결 끊김');
-      setIsConnected(false);
-      setWs(null);
-      onDisconnect?.();
-    };
+    // 2. 0.5초마다 반복 실행 (Polling)
+    intervalRef.current = setInterval(fetchLocation, 500);
+  };
 
-    setWs(socket);
-  }, [serverUrl, ws, onConnect, onError, onDisconnect]);
-
-  const disconnect = useCallback(() => {
-    if (ws) {
-      ws.close();
-      setWs(null);
-      setIsConnected(false);
-      console.log('WebSocket 연결 해제');
+  // 연결 해제 (폴링 중지)
+  const disconnect = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
     }
-  }, [ws]);
+    setIsConnected(false);
+    console.log('🔌 [HTTP Polling] 로봇 추적 중지');
+    onDisconnect?.();
+  };
 
-  // 자동 연결
+  // 자동 시작/종료 처리
   useEffect(() => {
-    if (autoConnect) {
+    if (autoConnect && serverUrl) {
       connect();
     }
 
-    // 컴포넌트 언마운트 시 연결 해제
+    // 컴포넌트가 사라질 때 정리(Cleanup)
     return () => {
-      if (ws) {
-        ws.close();
-      }
+      disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoConnect]); // connect / ws는 일부러 의존성에서 제외 (중복 연결 방지)
+  }, [serverUrl, autoConnect]);
 
   return {
     robotPosition,
     isConnected,
-    lastUpdate,
     accuracy,
     connect,
     disconnect,
@@ -167,8 +103,7 @@ export function useRobotTracking({
 }
 
 /**
- * Point-in-Polygon
- * 로봇 좌표(x, z)가 주어진 다각형 안에 있는지 판정
+ * Point-in-Polygon 유틸 함수 (기존 유지)
  */
 export function isPointInPolygon(
   x: number,
@@ -189,20 +124,4 @@ export function isPointInPolygon(
     if (intersect) inside = !inside;
   }
   return inside;
-}
-
-/**
- * 공통 타입 정의 (필요하면 사용, 아니면 무시해도 됨)
- */
-export interface RoomLabel {
-  id: string;
-  name: string;
-  position: [number, number, number]; // 라벨 표시 위치 (중앙)
-  corners: [number, number][]; // 4개 코너 [x,z]
-}
-
-export interface RobotPosition {
-  x: number;
-  z: number;
-  timestamp: number;
 }

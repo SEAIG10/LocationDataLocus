@@ -13,6 +13,7 @@ import { authRoutes } from './modules/auth/auth.routes';
 import { homesRoutes } from './modules/homes/homes.routes';
 import { devicesRoutes } from './modules/devices/devices.routes';
 import { labelsRoutes } from './modules/labels/labels.routes';
+import logRoutes from './modules/logs/logs.routes';
 
 (BigInt.prototype as any).toJSON = function () {
   return this.toString();
@@ -57,6 +58,7 @@ export function buildApp(): FastifyInstance {
     api.register(homesRoutes, { prefix: '/homes' });
     api.register(devicesRoutes, { prefix: '/devices' });
     api.register(labelsRoutes, { prefix: '/homes' });
+    app.register(logRoutes, { prefix: '/log' });
   }, { prefix: '/api' });
 
   return app;

@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from 'fastify';
 import * as homesService from './homes.service';
-import { prisma } from '../../config/db'; // 🔥 추가됨: prisma 인스턴스 import
+import { prisma } from '../../config/db'; 
 
 // 집 생성 핸들러
 export async function createHomeHandler(
@@ -11,15 +11,26 @@ export async function createHomeHandler(
     const parts = request.body as any;
     const user = request.user as { id: string };
 
+    // 텍스트 필드 추출
     const name = parts.name?.value || parts.name; 
     const addressLine = parts.addressLine?.value || parts.addressLine;
-    const imageFile = parts.image;
+    
+    // 파일 필드 추출
+    const imageFile = parts.image; // 프론트엔드 필드명: 'image'
+    const modelFile = parts.model; // 🔥 [추가] 프론트엔드 필드명: 'model' (glb 파일)
 
     if (!name) {
         return reply.code(400).send({ message: "홈 이름은 필수입니다." });
     }
 
-    const home = await homesService.createHome(user.id, name, addressLine, imageFile);
+    // 서비스 호출 (modelFile 인자 추가됨)
+    const home = await homesService.createHome(
+      user.id, 
+      name, 
+      addressLine, 
+      imageFile, 
+      modelFile // 🔥 [추가] 서비스로 모델 파일 전달
+    );
     
     return reply.code(201).send(home);
   } catch (e: any) {
@@ -57,7 +68,7 @@ export async function getHomeDetailHandler(
     }
 }
 
-// 🔥 홈 삭제 핸들러 (권한 체크 포함)
+// 홈 삭제 핸들러
 export async function deleteHomeHandler(
   request: FastifyRequest<{ Params: { id: string } }>,
   reply: FastifyReply

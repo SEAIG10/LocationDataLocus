@@ -14,14 +14,14 @@ datasource db {
 // --------------------------------------
 
 model User {
-  id           Int          @id @default(autoincrement())
-  email        String       @unique
-  passwordHash String?      @map("password_hash")
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  passwordHash String?    @map("password_hash")
   name         String
-  status       UserStatus   @default(ACTIVE)
-  lastLoginAt  DateTime?    @map("last_login_at")
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
+  status       UserStatus @default(ACTIVE)
+  lastLoginAt  DateTime?  @map("last_login_at")
+  createdAt    DateTime   @default(now()) @map("created_at")
+  updatedAt    DateTime   @updatedAt @map("updated_at")
 
   // Relations
   authProviders AuthProvider[]
@@ -56,17 +56,18 @@ model Home {
   name        String
   addressLine String?    @map("address_line")
   imageUrl    String?    @map("image_url")
+  modelUrl    String?    @map("model_url")
   status      HomeStatus @default(ACTIVE)
   createdAt   DateTime   @default(now()) @map("created_at")
   updatedAt   DateTime   @updatedAt @map("updated_at")
 
-  owner        User                  @relation("HomeOwner", fields: [ownerId], references: [id])
-  members      HomeMember[]
-  devices      Device[]
+  owner       User                  @relation("HomeOwner", fields: [ownerId], references: [id])
+  members     HomeMember[]
+  devices     Device[]
   calibrations MapCalibration[]
-  roomLabels   RoomLabel[]
+  roomLabels  RoomLabel[]
   sensorEvents SensorEvent[]
-  predictions  PollutionPrediction[]
+  predictions PollutionPrediction[]
 
   @@map("homes")
 }
@@ -159,7 +160,7 @@ model MapCalibration {
 model RoomLabel {
   id         Int       @id @default(autoincrement())
   homeId     Int       @map("home_id")
-  robotMapId Int?       @map("robot_map_id")
+  robotMapId Int?      @map("robot_map_id")
   name       String
   colorHex   String?   @map("color_hex")
   centerX    Float     @default(0) @map("center_x")
@@ -170,9 +171,9 @@ model RoomLabel {
   createdAt  DateTime  @default(now()) @map("created_at")
   updatedAt  DateTime  @updatedAt @map("updated_at")
 
-  home     Home                    @relation(fields: [homeId], references: [id], onDelete: Cascade)
-  robotMap RobotMap?                @relation(fields: [robotMapId], references: [id], onDelete: Cascade)
-  creator  User?                   @relation(fields: [createdBy], references: [id])
+  home     Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  robotMap RobotMap? @relation(fields: [robotMapId], references: [id], onDelete: Cascade)
+  creator  User?     @relation(fields: [createdBy], references: [id])
   points   RoomLabelPolygonPoint[]
   events   SensorEvent[]
   predictions PollutionPrediction[]
@@ -182,9 +183,9 @@ model RoomLabel {
 }
 
 model RoomLabelPolygonPoint {
-  id         Int       @id @default(autoincrement())
-  labelId    Int       @map("label_id")
-  orderIndex Int       @map("order_index")
+  id         Int   @id @default(autoincrement())
+  labelId    Int   @map("label_id")
+  orderIndex Int   @map("order_index")
   x          Float
   z          Float
 
@@ -199,36 +200,34 @@ model RoomLabelPolygonPoint {
 // --------------------------------------
 
 model RobotLocation {
-  // [피드백 반영] 대용량 로그 대비 BigInt 적용
-  id             BigInt         @id @default(autoincrement())
-  deviceId       Int            @map("device_id")
-  robotMapId     Int?           @map("robot_map_id")
-  recordedAt     DateTime       @map("recorded_at")
+  id              BigInt          @id @default(autoincrement())
+  deviceId        Int             @map("device_id")
+  robotMapId      Int?            @map("robot_map_id")
+  recordedAt      DateTime        @map("recorded_at")
 
-  x              Float
-  y              Float
-  z              Float
-  headingDeg     Float?         @map("heading_deg")
+  x               Float
+  y               Float
+  z               Float
+  headingDeg      Float?          @map("heading_deg")
+   
+  rawLat          Float?          @map("raw_lat")
+  rawLng          Float?          @map("raw_lng")
+   
+  source          LocationSource  @default(ROBOT)
+  rawPayloadJson  Json?           @map("raw_payload_json")
+
+  device    Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  robotMap  RobotMap? @relation(fields: [robotMapId], references: [id])
   
-  // [피드백 반영] 확장성을 위한 GPS 위경도 필드 추가
-  rawLat         Float?         @map("raw_lat")
-  rawLng         Float?         @map("raw_lng")
-  
-  source         LocationSource @default(ROBOT)
-  rawPayloadJson Json?          @map("raw_payload_json")
+  // [수정] SensorEvent와의 관계는 유지
+  events    SensorEvent[]
 
-  device   Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  robotMap RobotMap? @relation(fields: [robotMapId], references: [id])
-  events   SensorEvent[]
-
-  // [피드백 반영] 자주 조회되는 패턴에 맞춰 인덱스 최적화
   @@index([deviceId, recordedAt])
   @@index([robotMapId, recordedAt])
   @@map("robot_locations")
 }
 
 model SensorEvent {
-  // [피드백 반영] 대용량 로그 대비 BigInt 적용
   id              BigInt    @id @default(autoincrement())
   homeId          Int       @map("home_id")
   deviceId        Int?      @map("device_id")
@@ -239,15 +238,24 @@ model SensorEvent {
 
   severity        Severity  @default(INFO)
   labelId         Int?      @map("label_id")
-  robotLocationId BigInt?   @map("robot_location_id") // RobotLocation.id와 타입 일치(BigInt)
+  robotLocationId BigInt?   @map("robot_location_id")
   payloadJson     Json?     @map("payload_json")
+
+  // 🔥 [추가됨] 위치 스냅샷 필드 (필수!!)
+  // RobotLocation 원본이 삭제되어도, 이벤트 발생 위치는 영원히 남겨야 합니다.
+  snapshotX       Float?    @map("snapshot_x")
+  snapshotY       Float?    @map("snapshot_y")
+  snapshotZ       Float?    @map("snapshot_z")
 
   home          Home           @relation(fields: [homeId], references: [id], onDelete: Cascade)
   device        Device?        @relation(fields: [deviceId], references: [id])
   label         RoomLabel?     @relation(fields: [labelId], references: [id])
-  robotLocation RobotLocation? @relation(fields: [robotLocationId], references: [id])
+  
+  // 🔥 [수정됨] onDelete: SetNull
+  // 오래된 로그(RobotLocation)를 지울 때, 이 이벤트는 지워지지 않고 
+  // robotLocationId만 null로 바뀌면서 안전하게 보존됩니다.
+  robotLocation RobotLocation? @relation(fields: [robotLocationId], references: [id], onDelete: SetNull)
 
-  // [피드백 반영] 조회 성능 최적화를 위한 인덱스 추가
   @@index([homeId, eventTime])
   @@index([deviceId, eventTime])
   @@index([labelId, eventTime])
@@ -255,27 +263,25 @@ model SensorEvent {
 }
 
 model PollutionPrediction {
-  // [피드백 반영] 예측 데이터 누적 대비 BigInt 적용
-  id                 BigInt        @id @default(autoincrement())
-  homeId             Int           @map("home_id")
-  deviceId           Int           @map("device_id")
-  robotMapId         Int?          @map("robot_map_id")
-  labelId            Int?          @map("label_id")
-  
-  predictionTime     DateTime      @map("prediction_time")
-  timeWindowStart    DateTime?     @map("time_window_start")
-  timeWindowEnd      DateTime?     @map("time_window_end")
-  
-  // [수정] GRU 모델 결과에 맞춰 오염 타입 단순화
-  pollutionType      PollutionType @default(CLEANING_NEEDED) @map("pollution_type")
-  
-  probability        Float         // 0.0 ~ 1.0 (청소 필요 확률)
-  modelVersion       String        @map("model_version")
-  featureSummaryJson Json?         @map("feature_summary_json")
+  id                 BigInt          @id @default(autoincrement())
+  homeId             Int             @map("home_id")
+  deviceId           Int             @map("device_id")
+  robotMapId         Int?            @map("robot_map_id")
+  labelId            Int?            @map("label_id")
+   
+  predictionTime     DateTime        @map("prediction_time")
+  timeWindowStart    DateTime?       @map("time_window_start")
+  timeWindowEnd      DateTime?       @map("time_window_end")
+   
+  pollutionType      PollutionType   @default(CLEANING_NEEDED) @map("pollution_type")
+   
+  probability        Float           
+  modelVersion       String          @map("model_version")
+  featureSummaryJson Json?           @map("feature_summary_json")
 
-  home     Home       @relation(fields: [homeId], references: [id], onDelete: Cascade)
-  device   Device     @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  robotMap RobotMap?  @relation(fields: [robotMapId], references: [id])
+  home     Home      @relation(fields: [homeId], references: [id], onDelete: Cascade)
+  device   Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  robotMap RobotMap? @relation(fields: [robotMapId], references: [id])
   label    RoomLabel? @relation(fields: [labelId], references: [id])
 
   @@index([homeId, predictionTime])
@@ -345,7 +351,6 @@ enum Severity {
   CRITICAL
 }
 
-// [수정] 불필요한 오염 종류 제거 및 단순화
 enum PollutionType {
   CLEANING_NEEDED
 }
