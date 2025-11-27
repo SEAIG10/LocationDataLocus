@@ -21,7 +21,7 @@ import { useRestApiSender } from './hooks/useRestApiSender';
 // ngrok을 쓴다면: https://xxxx.ngrok-free.app/api/log/record
 // 1. 기본 도메인 (Ngrok 주소가 바뀌면 여기만 변경!)
 
-const SERVER_HOST = 'https://5cdb46c640c2.ngrok-free.app';
+const SERVER_HOST = 'https://fad6f8263bcc.ngrok-free.app';
 // 2. API 경로 (백엔드 라우터)
 
 const API_PATH = '/api/log/record';

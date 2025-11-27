@@ -1,12 +1,16 @@
-// --- 응답 공통 타입 ---
+/**
+ * src/api/types.ts
+ */
+
+// --- 1. 응답 공통 타입 ---
 export interface ApiResponse<T> {
   message?: string;
   data?: T;
 }
 
-// --- User & Auth ---
+// --- 2. User & Auth ---
 export interface User {
-  id: string;
+  id: string; 
   email: string;
   name: string;
 }
@@ -22,7 +26,7 @@ export interface RegisterResponse {
   userId: string;
 }
 
-// --- Home ---
+// --- 3. Home ---
 export interface Home {
   id: string;
   name: string;
@@ -30,10 +34,10 @@ export interface Home {
   role: 'OWNER' | 'MEMBER';
   deviceCount?: number;
   imageUrl?: string | null;
-  modelUrl?: string | null; // ✅ 3D 모델 URL 확인
+  modelUrl?: string | null;
 }
 
-// --- Device & Robot ---
+// --- 4. Device & Robot ---
 export interface Device {
   id: string;
   name: string;
@@ -58,31 +62,45 @@ export interface RobotMap {
   mapJson: any;
 }
 
-// --- Label & Prediction ---
+// --- 5. Label & Map Zones ---
 export interface RoomLabel {
-  id: string;
+  id: number; // RoomLabel은 보통 Int 범위라 number 유지 (백엔드도 number로 보냄)
   name: string;
   colorHex?: string;
   points: { x: number; z: number }[];
 }
 
+// --- 6. Logs (Pollution & Events) ---
+
+// 🔴 오염도 예측 데이터
 export interface PollutionPrediction {
-  labelId: string;
-  labelName: string;
-  probability: number;
-  status: 'CLEANING_NEEDED' | 'CLEAN';
+  id: string; // ✅ [수정] 백엔드에서 BigInt -> String 변환해서 보냄
+  homeId: number;
+  labelId: number | null; // 백엔드에서 Number() 변환해서 보냄
+  probability: number; 
+  predictionTime: string; 
+  label?: {
+    name: string;
+  };
+  status?: 'CLEANING_NEEDED' | 'CLEAN'; // Optional 처리
 }
 
-// 🔥 [추가] SensorEvent 인터페이스 (DB 스키마와 일치시킴)
+// 🔵 센서/시스템 이벤트 데이터
 export interface SensorEvent {
-  id: string;
-  eventTime: string;
-  eventType: 'AUDIO' | 'VISION' | 'SYSTEM' | 'USER_ACTION';
-  subType?: string;
-  severity: 'INFO' | 'WARNING' | 'CRITICAL';
-  payloadJson?: any;
+  id: string; // ✅ BigInt -> String
+  homeId: number;
+  eventTime: string; 
   
-  // 📍 스냅샷 좌표 (원본 로그가 지워져도 지도에 표시하기 위함)
+  eventType: 'AUDIO' | 'VISION' | 'SYSTEM' | 'USER_ACTION';
+  subType?: string; 
+  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  
+  payloadJson?: any; 
+  
+  label?: {
+    name: string;
+  };
+
   snapshotX?: number;
   snapshotY?: number;
   snapshotZ?: number;

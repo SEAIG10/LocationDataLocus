@@ -1,10 +1,12 @@
 import { prisma } from '../../config/db';
 import { FastifyInstance } from 'fastify';
 import { LocationSource } from '@prisma/client';
+import { eventBus, EVENTS } from '../../lib/eventBus'; // ✅ EventBus 임포트
 
 const BATCH_SIZE = 50;
 const FLUSH_INTERVAL = 5000;
 
+// 메모리 버퍼용 인터페이스
 interface PendingLog {
   deviceId: number;
   x: number;
@@ -15,11 +17,11 @@ interface PendingLog {
   source: LocationSource;
 }
 
-// 데이터를 임시로 쌓아두는 메모리 버퍼
 let logBuffer: PendingLog[] = [];
 
 /**
  * 1. [저장] 위치 데이터 수신 및 버퍼링 (POST용)
+ * Mobile App -> HTTP POST -> 여기 도착
  */
 export const bufferLocationLog = async (server: FastifyInstance, data: any) => {
   const record: PendingLog = {
@@ -32,34 +34,30 @@ export const bufferLocationLog = async (server: FastifyInstance, data: any) => {
     source: 'MOBILE',
   };
 
-  // (선택사항) 소켓이 연결되어 있다면 소켓으로도 쏴줍니다. (하이브리드 지원)
-  if ((server as any).io) {
-    (server as any).io.emit('robot_position', record);
-  }
+  // ✅ [수정됨] 직접 io.emit 하지 않고, EventBus에 "위치 업데이트 됨" 알림
+  eventBus.emit(EVENTS.NEW_ROBOT_LOCATION, record);
 
-  // 메모리 버퍼에 추가
+  // 메모리 버퍼에 추가 (DB 일괄 저장용)
   logBuffer.push(record);
 
-  // 버퍼가 꽉 찼으면 DB에 저장
   if (logBuffer.length >= BATCH_SIZE) {
     await flushLogsToDB();
   }
 };
 
 /**
- * 2. [조회] 가장 최신 위치 데이터 1개 반환 (GET용)
- * 🔥 HTTP 폴링을 위해 새로 추가된 핵심 로직
+ * 2. [조회] 가장 최신 위치 데이터 1개 반환 (GET Polling Fallback용)
  */
 export const getLatestLocation = async () => {
-  // 1순위: 아직 DB에 안 들어간 '버퍼'에 있는 데이터가 가장 최신입니다.
+  // 1순위: 버퍼 확인
   if (logBuffer.length > 0) {
     return logBuffer[logBuffer.length - 1];
   }
 
-  // 2순위: 버퍼가 비어있다면 DB에서 가장 최근 데이터를 가져옵니다.
+  // 2순위: DB 확인
   const latestFromDB = await prisma.robotLocation.findFirst({
     orderBy: { recordedAt: 'desc' },
-    select: { x: true, y: true, z: true, recordedAt: true, id: true } // 필요한 필드만
+    select: { x: true, y: true, z: true, recordedAt: true, id: true }
   });
 
   return latestFromDB;
@@ -94,7 +92,7 @@ const flushLogsToDB = async () => {
   }
 };
 
-// 주기적 저장
+// 주기적 저장 실행
 setInterval(() => {
   if (logBuffer.length > 0) flushLogsToDB();
 }, FLUSH_INTERVAL);

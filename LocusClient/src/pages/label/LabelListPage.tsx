@@ -37,17 +37,17 @@ const LabelListPage: React.FC = () => {
     }
   };
 
-  // 🔥 [수정] 생성 버튼 클릭 시 대시보드로 이동 (좌표를 찍기 위해)
   const handleGoToCreate = () => {
     if (!homeId) return;
-    // action=create 파라미터를 붙여서 이동
     navigate(`/homes/${homeId}/dashboard?action=create`);
   };
 
-  const handleDeleteLabel = async (labelId: string) => {
+  const handleDeleteLabel = async (labelId: number) => { // ✅ number 타입으로 수정
+    if (!homeId) return; // homeId 체크
     if (!confirm("이 라벨을 삭제하시겠습니까?")) return;
     try {
-      await deleteLabelAPI(labelId);
+      // ✅ 수정됨: API가 (homeId, labelId) 두 개를 받도록 변경됨
+      await deleteLabelAPI(homeId, labelId);
       setLabels(labels.filter(l => l.id !== labelId));
     } catch (error) {
       alert("삭제 실패");
@@ -82,7 +82,7 @@ const LabelListPage: React.FC = () => {
 
         <div className="p-4 bg-gray-50/50">
           <Button 
-            onClick={handleGoToCreate} // 🔥 변경된 핸들러 연결
+            onClick={handleGoToCreate} 
             className="w-full bg-[#A50034] hover:bg-[#8b002c] text-white rounded-lg py-6 shadow-md flex items-center justify-center gap-2"
           >
             <Plus className="w-5 h-5" />구조도에서 새 라벨 추가
@@ -113,6 +113,7 @@ const LabelListPage: React.FC = () => {
                         <span className="text-xs text-gray-400 font-mono">{formatPoints(label.points)}</span>
                       </div>
                     </div>
+                    {/* ✅ 타입 문제 해결: label.id는 number이므로 그대로 전달 */}
                     <button onClick={() => handleDeleteLabel(label.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1">
                       <Trash2 className="w-4 h-4" />
                     </button>

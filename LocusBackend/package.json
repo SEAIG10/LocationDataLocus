@@ -14,12 +14,16 @@
     "dotenv": "^17.2.3",
     "fastify": "^5.6.2",
     "jsonwebtoken": "^9.0.2",
+    "mqtt": "^5.14.1",
+    "socket": "^1.1.38",
+    "socket.io": "^4.8.1",
     "util": "^0.12.5",
     "zod": "^4.1.12"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/mqtt": "^0.0.34",
     "@types/node": "^24.10.1",
     "prisma": "^5.18.0",
     "ts-node-dev": "^2.0.0",
